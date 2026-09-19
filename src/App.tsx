@@ -243,7 +243,7 @@ export default function App() {
       parameters: {
         aspectRatio: settings.aspectRatio,
         resolution: settings.resolution,
-        durationSeconds: settings.duration,
+        durationSeconds: parseInt(settings.duration),
         personGeneration: settings.personGeneration,
         sampleCount: 1,
       },
