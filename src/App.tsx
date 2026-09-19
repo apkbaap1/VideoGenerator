@@ -434,41 +434,83 @@ export default function App() {
           </div>
         )}
 
+        {/* Mode Selector - Prominent Top Section */}
+        <div className="mb-8 p-6 rounded-3xl bg-gradient-to-br from-white/10 to-white/5 border border-white/20 backdrop-blur-xl">
+          <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+            <span className="text-lg">🎬</span> Choose Generation Mode
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              onClick={() => setMode('text-to-video')}
+              className={`relative p-6 rounded-2xl font-semibold text-left transition-all border-2 ${
+                mode === 'text-to-video'
+                  ? 'bg-gradient-to-br from-blue-600/30 to-purple-600/30 border-blue-400 text-white shadow-xl shadow-blue-500/20'
+                  : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/30'
+              }`}
+            >
+              {mode === 'text-to-video' && (
+                <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              )}
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${mode === 'text-to-video' ? 'bg-blue-500/30' : 'bg-white/10'}`}>
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-lg font-bold">Text to Video</div>
+                  <div className={`text-xs mt-0.5 ${mode === 'text-to-video' ? 'text-blue-200' : 'text-gray-500'}`}>
+                    Generate from a text description
+                  </div>
+                </div>
+              </div>
+              <p className={`text-xs ${mode === 'text-to-video' ? 'text-blue-200/80' : 'text-gray-500'}`}>
+                Write a prompt describing your video. Veo will create it from scratch with audio.
+              </p>
+            </button>
+            <button
+              onClick={() => setMode('image-to-video')}
+              className={`relative p-6 rounded-2xl font-semibold text-left transition-all border-2 ${
+                mode === 'image-to-video'
+                  ? 'bg-gradient-to-br from-purple-600/30 to-pink-600/30 border-purple-400 text-white shadow-xl shadow-purple-500/20'
+                  : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/30'
+              }`}
+            >
+              {mode === 'image-to-video' && (
+                <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              )}
+              <div className="flex items-center gap-3 mb-2">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${mode === 'image-to-video' ? 'bg-purple-500/30' : 'bg-white/10'}`}>
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-lg font-bold">Image to Video</div>
+                  <div className={`text-xs mt-0.5 ${mode === 'image-to-video' ? 'text-purple-200' : 'text-gray-500'}`}>
+                    Animate an image into video
+                  </div>
+                </div>
+              </div>
+              <p className={`text-xs ${mode === 'image-to-video' ? 'text-purple-200/80' : 'text-gray-500'}`}>
+                Upload an image as first frame (or first + last frame) and Veo animates it.
+              </p>
+            </button>
+          </div>
+        </div>
+
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Panel - Input */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Mode Selector */}
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setMode('text-to-video')}
-                  className={`flex-1 py-3 px-4 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-                    mode === 'text-to-video'
-                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-                      : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  Text to Video
-                </button>
-                <button
-                  onClick={() => setMode('image-to-video')}
-                  className={`flex-1 py-3 px-4 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-                    mode === 'image-to-video'
-                      ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
-                      : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  Image to Video
-                </button>
-              </div>
-            </div>
 
             {/* Image Upload (only for image-to-video mode) */}
             {mode === 'image-to-video' && (
@@ -636,17 +678,14 @@ export default function App() {
 
               {/* Current settings summary */}
               <div className="flex flex-wrap gap-2 mt-3">
-                <span className={`text-xs px-2 py-1 rounded-lg border ${mode === 'text-to-video' ? 'bg-blue-500/10 text-blue-300 border-blue-500/20' : 'bg-purple-500/10 text-purple-300 border-purple-500/20'}`}>
-                  {mode === 'text-to-video' ? '📝 Text → Video' : '🖼️ Image → Video'}
-                </span>
                 <span className="text-xs px-2 py-1 rounded-lg bg-blue-500/10 text-blue-300 border border-blue-500/20">
-                  {settings.aspectRatio}
+                  📐 {settings.aspectRatio}
                 </span>
                 <span className="text-xs px-2 py-1 rounded-lg bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                  {settings.resolution}
+                  📺 {settings.resolution}
                 </span>
                 <span className="text-xs px-2 py-1 rounded-lg bg-pink-500/10 text-pink-300 border border-pink-500/20">
-                  {settings.duration}s
+                  ⏱️ {settings.duration}s
                 </span>
                 <span className="text-xs px-2 py-1 rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
                   🎵 Audio
