@@ -243,7 +243,7 @@ export default function App() {
       parameters: {
         aspectRatio: settings.aspectRatio,
         resolution: settings.resolution,
-        durationSeconds: settings.duration,
+        durationSeconds: parseInt(settings.duration),
         personGeneration: settings.personGeneration,
         sampleCount: 1,
       },
@@ -334,8 +334,10 @@ export default function App() {
             </div>
           </div>
           <button
+            type="button"
             onClick={() => setShowSettings(!showSettings)}
-            className={`p-3 rounded-xl transition-all ${showSettings ? 'bg-blue-500/20 text-blue-300' : 'bg-white/5 hover:bg-white/10 text-gray-400'}`}
+            className={`p-3 rounded-xl transition-all cursor-pointer active:scale-95 ${showSettings ? 'bg-blue-500/20 text-blue-300 ring-2 ring-blue-400/50' : 'bg-white/10 hover:bg-white/20 text-gray-300'}`}
+            title="Settings"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -441,8 +443,9 @@ export default function App() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <button
+              type="button"
               onClick={() => setMode('text-to-video')}
-              className={`relative p-6 rounded-2xl font-semibold text-left transition-all border-2 ${
+              className={`relative p-6 rounded-2xl font-semibold text-left transition-all border-2 cursor-pointer active:scale-[0.98] ${
                 mode === 'text-to-video'
                   ? 'bg-gradient-to-br from-blue-600/30 to-purple-600/30 border-blue-400 text-white shadow-xl shadow-blue-500/20'
                   : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/30'
@@ -473,8 +476,9 @@ export default function App() {
               </p>
             </button>
             <button
+              type="button"
               onClick={() => setMode('image-to-video')}
-              className={`relative p-6 rounded-2xl font-semibold text-left transition-all border-2 ${
+              className={`relative p-6 rounded-2xl font-semibold text-left transition-all border-2 cursor-pointer active:scale-[0.98] ${
                 mode === 'image-to-video'
                   ? 'bg-gradient-to-br from-purple-600/30 to-pink-600/30 border-purple-400 text-white shadow-xl shadow-purple-500/20'
                   : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:border-white/30'
@@ -522,8 +526,9 @@ export default function App() {
                 {/* Image mode sub-selector */}
                 <div className="flex gap-2 mb-4">
                   <button
+                    type="button"
                     onClick={() => setImageMode('first-frame')}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer active:scale-95 ${
                       imageMode === 'first-frame'
                         ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                         : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
@@ -532,8 +537,9 @@ export default function App() {
                     First Frame Only
                   </button>
                   <button
+                    type="button"
                     onClick={() => setImageMode('first-last-frame')}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all cursor-pointer active:scale-95 ${
                       imageMode === 'first-last-frame'
                         ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                         : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
@@ -568,14 +574,16 @@ export default function App() {
                         />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center gap-2">
                           <button
+                            type="button"
                             onClick={() => firstFrameInputRef.current?.click()}
-                            className="px-3 py-1.5 rounded-lg bg-white/20 text-white text-xs hover:bg-white/30 transition-colors"
+                            className="px-3 py-1.5 rounded-lg bg-white/20 text-white text-xs hover:bg-white/30 transition-colors cursor-pointer active:scale-95"
                           >
                             Replace
                           </button>
                           <button
+                            type="button"
                             onClick={() => setFirstFrame(null)}
-                            className="px-3 py-1.5 rounded-lg bg-red-500/30 text-red-200 text-xs hover:bg-red-500/50 transition-colors"
+                            className="px-3 py-1.5 rounded-lg bg-red-500/30 text-red-200 text-xs hover:bg-red-500/50 transition-colors cursor-pointer active:scale-95"
                           >
                             Remove
                           </button>
@@ -586,13 +594,14 @@ export default function App() {
                       </div>
                     ) : (
                       <button
+                        type="button"
                         onClick={() => firstFrameInputRef.current?.click()}
-                        className="w-full h-40 rounded-xl border-2 border-dashed border-white/20 hover:border-purple-400/50 transition-colors flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-gray-300"
+                        className="w-full h-40 rounded-xl border-2 border-dashed border-white/20 hover:border-purple-400/50 transition-all cursor-pointer active:scale-[0.98] flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-gray-300"
                       >
                         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        <span className="text-xs">Click to upload image</span>
+                        <span className="text-xs font-medium">Click to upload image</span>
                         <span className="text-[10px] text-gray-600">PNG, JPG, WEBP (max 20MB)</span>
                       </button>
                     )}
@@ -621,14 +630,16 @@ export default function App() {
                           />
                           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center gap-2">
                             <button
+                              type="button"
                               onClick={() => lastFrameInputRef.current?.click()}
-                              className="px-3 py-1.5 rounded-lg bg-white/20 text-white text-xs hover:bg-white/30 transition-colors"
+                              className="px-3 py-1.5 rounded-lg bg-white/20 text-white text-xs hover:bg-white/30 transition-colors cursor-pointer active:scale-95"
                             >
                               Replace
                             </button>
                             <button
+                              type="button"
                               onClick={() => setLastFrame(null)}
-                              className="px-3 py-1.5 rounded-lg bg-red-500/30 text-red-200 text-xs hover:bg-red-500/50 transition-colors"
+                              className="px-3 py-1.5 rounded-lg bg-red-500/30 text-red-200 text-xs hover:bg-red-500/50 transition-colors cursor-pointer active:scale-95"
                             >
                               Remove
                             </button>
@@ -639,13 +650,14 @@ export default function App() {
                         </div>
                       ) : (
                         <button
+                          type="button"
                           onClick={() => lastFrameInputRef.current?.click()}
-                          className="w-full h-40 rounded-xl border-2 border-dashed border-white/20 hover:border-pink-400/50 transition-colors flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-gray-300"
+                          className="w-full h-40 rounded-xl border-2 border-dashed border-white/20 hover:border-pink-400/50 transition-all cursor-pointer active:scale-[0.98] flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-gray-300"
                         >
                           <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
-                          <span className="text-xs">Click to upload image</span>
+                          <span className="text-xs font-medium">Click to upload image</span>
                           <span className="text-[10px] text-gray-600">PNG, JPG, WEBP (max 20MB)</span>
                         </button>
                       )}
@@ -701,12 +713,13 @@ export default function App() {
 
               {/* Generate Button */}
               <button
+                type="button"
                 onClick={generateVideo}
                 disabled={isGenerating || !prompt.trim() || (mode === 'image-to-video' && !firstFrame)}
                 className={`mt-4 w-full py-3.5 rounded-xl font-semibold text-white transition-all ${
                   isGenerating || !prompt.trim() || (mode === 'image-to-video' && !firstFrame)
                     ? 'bg-gray-700 cursor-not-allowed opacity-50'
-                    : 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:opacity-90 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40'
+                    : 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:opacity-90 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 cursor-pointer active:scale-[0.98]'
                 }`}
               >
                 {isGenerating ? (
@@ -732,8 +745,9 @@ export default function App() {
                 {(mode === 'text-to-video' ? EXAMPLE_PROMPTS : IMAGE_EXAMPLE_PROMPTS).map((ep, i) => (
                   <button
                     key={i}
+                    type="button"
                     onClick={() => setPrompt(ep)}
-                    className="text-left p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-blue-500/30 transition-all text-xs text-gray-400 hover:text-gray-200 line-clamp-2"
+                    className="text-left p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-blue-500/30 transition-all cursor-pointer active:scale-[0.98] text-xs text-gray-400 hover:text-gray-200 line-clamp-2"
                   >
                     {ep}
                   </button>
@@ -785,7 +799,7 @@ export default function App() {
                     download
                     target="_blank"
                     rel="noopener"
-                    className="mt-2 block text-center py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-gray-300 transition-colors"
+                    className="mt-2 block text-center py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-gray-300 transition-colors cursor-pointer active:scale-95"
                   >
                     ⬇️ Download Video
                   </a>
@@ -839,8 +853,9 @@ export default function App() {
                 <h3 className="text-sm font-medium text-gray-300">📋 History</h3>
                 {tasks.length > 0 && (
                   <button
+                    type="button"
                     onClick={clearHistory}
-                    className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+                    className="text-xs text-gray-500 hover:text-red-400 transition-colors cursor-pointer"
                   >
                     Clear all
                   </button>
@@ -871,8 +886,9 @@ export default function App() {
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-xs text-gray-300 line-clamp-2 flex-1">{task.prompt}</p>
                         <button
+                          type="button"
                           onClick={(e) => { e.stopPropagation(); deleteTask(task.operationName); }}
-                          className="text-gray-500 hover:text-red-400 transition-colors shrink-0"
+                          className="text-gray-500 hover:text-red-400 transition-colors shrink-0 cursor-pointer active:scale-95"
                         >
                           ✕
                         </button>
