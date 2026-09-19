@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 type GenerationMode = 'text-to-video' | 'image-to-video';
-type ImageMode = 'reference' | 'first-last-frame';
+type ImageMode = 'first-frame' | 'first-last-frame';
 
 interface VideoTask {
   id: string;
@@ -12,19 +12,11 @@ interface VideoTask {
   error?: string;
   createdAt: number;
   model: string;
+  mode: GenerationMode;
   aspectRatio: string;
   resolution: string;
   duration: string;
-  mode: GenerationMode;
-  imageCount?: number;
-}
-
-interface UploadedImage {
-  id: string;
-  file: File;
-  base64: string;
-  mimeType: string;
-  preview: string;
+  imagePreview?: string;
 }
 
 interface AppSettings {
@@ -45,23 +37,21 @@ const DEFAULT_SETTINGS: AppSettings = {
   personGeneration: 'allow_all',
 };
 
-const EXAMPLE_PROMPTS = {
-  'text-to-video': [
-    "A close up of two people staring at a cryptic drawing on a wall, torchlight flickering. A man murmurs, 'This must be it. That's the secret code.' The woman looks at him and whispering excitedly, 'What did you find?'",
-    "Drone shot following a classic red convertible driven by a man along a winding coastal road at sunset, waves crashing against the rocks below. The convertible accelerates fast and the engine roars loudly.",
-    "A whimsical stop-motion animation of a tiny robot tending to a garden of glowing mushrooms on a miniature planet.",
-    "A wide shot of a misty Pacific Northwest forest. Two exhausted hikers push through ferns when they stop abruptly, staring at a tree. Close-up: Fresh, deep claw marks are gouged into the tree's bark.",
-    "Film noir style, man and woman walk on the street, mystery, cinematic, black and white.",
-    "A POV shot from a vintage car driving in the rain, Canada at night, cinematic.",
-  ],
-  'image-to-video': [
-    "Bring this image to life with subtle motion and natural lighting.",
-    "Animate this scene with gentle camera movement and atmospheric effects.",
-    "Transform this static image into a dynamic video with realistic motion.",
-    "Add cinematic movement and depth to this scene.",
-    "Make this image come alive with smooth, natural animation.",
-  ],
-};
+const EXAMPLE_PROMPTS = [
+  "A close up of two people staring at a cryptic drawing on a wall, torchlight flickering. A man murmurs, 'This must be it. That's the secret code.' The woman looks at him and whispering excitedly, 'What did you find?'",
+  "Drone shot following a classic red convertible driven by a man along a winding coastal road at sunset, waves crashing against the rocks below. The convertible accelerates fast and the engine roars loudly.",
+  "A whimsical stop-motion animation of a tiny robot tending to a garden of glowing mushrooms on a miniature planet.",
+  "A wide shot of a misty Pacific Northwest forest. Two exhausted hikers push through ferns when they stop abruptly, staring at a tree. Close-up: Fresh, deep claw marks are gouged into the tree's bark.",
+  "Film noir style, man and woman walk on the street, mystery, cinematic, black and white.",
+  "A POV shot from a vintage car driving in the rain, Canada at night, cinematic.",
+];
+
+const IMAGE_EXAMPLE_PROMPTS = [
+  "The scene comes alive with gentle motion, camera slowly zooming in, ambient sounds of nature",
+  "Transform this into a cinematic scene with dramatic lighting, slow camera pan, and atmospheric music",
+  "Bring this image to life with subtle movements, wind blowing through the scene, soft background ambience",
+  "Make the subject move naturally, add realistic physics and environmental sounds",
+];
 
 const MODELS = [
   { value: 'veo-3.1-generate-preview', label: 'Veo 3.1 (Latest)', desc: 'Best quality, 4K support' },
@@ -72,7 +62,6 @@ const MODELS = [
 ];
 
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 export default function App() {
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -80,11 +69,8 @@ export default function App() {
     return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
   });
   const [mode, setMode] = useState<GenerationMode>('text-to-video');
-  const [imageMode, setImageMode] = useState<ImageMode>('reference');
+  const [imageMode, setImageMode] = useState<ImageMode>('first-frame');
   const [prompt, setPrompt] = useState('');
-  const [images, setImages] = useState<UploadedImage[]>([]);
-  const [firstFrame, setFirstFrame] = useState<UploadedImage | null>(null);
-  const [lastFrame, setLastFrame] = useState<UploadedImage | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [tasks, setTasks] = useState<VideoTask[]>(() => {
     const saved = localStorage.getItem('veo-video-tasks');
@@ -93,10 +79,13 @@ export default function App() {
   const [activeVideo, setActiveVideo] = useState<VideoTask | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Image upload state
+  const [firstFrame, setFirstFrame] = useState<{ base64: string; mimeType: string; preview: string } | null>(null);
+  const [lastFrame, setLastFrame] = useState<{ base64: string; mimeType: string; preview: string } | null>(null);
   const firstFrameInputRef = useRef<HTMLInputElement>(null);
   const lastFrameInputRef = useRef<HTMLInputElement>(null);
+
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -113,11 +102,8 @@ export default function App() {
 
     try {
       const response = await fetch(`${BASE_URL}/${task.operationName}`, {
-        headers: {
-          'x-goog-api-key': settings.apiKey,
-        },
+        headers: { 'x-goog-api-key': settings.apiKey },
       });
-
       const data = await response.json();
 
       if (data.error) {
@@ -130,32 +116,24 @@ export default function App() {
       }
 
       if (data.done) {
-        if (data.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri) {
-          const videoUrl = data.response.generateVideoResponse.generatedSamples[0].video.uri;
+        const videoUri = data.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri;
+        if (videoUri) {
           setTasks(prev => prev.map(t =>
             t.operationName === task.operationName
-              ? { ...t, status: 'SUCCEEDED', videoUrl }
-              : t
-          ));
-        } else if (data.error) {
-          setTasks(prev => prev.map(t =>
-            t.operationName === task.operationName
-              ? { ...t, status: 'FAILED', error: data.error.message || 'Generation failed' }
+              ? { ...t, status: 'SUCCEEDED', videoUrl: videoUri }
               : t
           ));
         } else {
           setTasks(prev => prev.map(t =>
             t.operationName === task.operationName
-              ? { ...t, status: 'SUCCEEDED' }
+              ? { ...t, status: 'FAILED', error: 'No video returned' }
               : t
           ));
         }
         return true;
       } else {
         setTasks(prev => prev.map(t =>
-          t.operationName === task.operationName
-            ? { ...t, status: 'RUNNING' }
-            : t
+          t.operationName === task.operationName ? { ...t, status: 'RUNNING' } : t
         ));
         return false;
       }
@@ -165,7 +143,7 @@ export default function App() {
     }
   }, [settings.apiKey]);
 
-  // Start polling for pending tasks
+  // Polling loop
   useEffect(() => {
     const pendingTasks = tasks.filter(t => t.status === 'PENDING' || t.status === 'RUNNING');
 
@@ -176,7 +154,6 @@ export default function App() {
           const done = await pollTask(task);
           if (!done) allDone = false;
         }
-
         if (allDone) {
           if (pollingRef.current) {
             clearInterval(pollingRef.current);
@@ -195,86 +172,28 @@ export default function App() {
     };
   }, [tasks.filter(t => t.status === 'PENDING' || t.status === 'RUNNING').length, settings.apiKey, pollTask]);
 
-  // File handling
-  const processFile = (file: File): Promise<UploadedImage> => {
-    return new Promise((resolve, reject) => {
-      if (file.size > MAX_FILE_SIZE) {
-        reject(new Error(`File ${file.name} is too large. Max size is 20MB.`));
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        resolve({
-          id: Date.now().toString() + Math.random(),
-          file,
-          base64,
-          mimeType: file.type,
-          preview: reader.result as string,
-        });
-      };
-      reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleImageUpload = async (files: FileList | null) => {
-    if (!files) return;
-
-    try {
-      const newImages: UploadedImage[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!file.type.startsWith('image/')) {
-          setError(`File ${file.name} is not an image`);
-          continue;
-        }
-        const img = await processFile(file);
-        newImages.push(img);
-      }
-
-      if (imageMode === 'reference') {
-        setImages(prev => [...prev, ...newImages].slice(0, 3));
-      } else {
-        // First/last frame mode - only use first uploaded image
-        if (newImages.length > 0) {
-          if (!firstFrame) {
-            setFirstFrame(newImages[0]);
-          } else if (!lastFrame) {
-            setLastFrame(newImages[0]);
-          }
-        }
-      }
-      setError('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to upload image');
+  const handleImageUpload = (
+    file: File,
+    setter: (val: { base64: string; mimeType: string; preview: string } | null) => void
+  ) => {
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file');
+      return;
     }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    await handleImageUpload(e.dataTransfer.files);
-  };
-
-  const removeImage = (id: string) => {
-    if (imageMode === 'reference') {
-      setImages(prev => prev.filter(img => img.id !== id));
-    } else {
-      if (firstFrame?.id === id) setFirstFrame(null);
-      if (lastFrame?.id === id) setLastFrame(null);
+    if (file.size > 20 * 1024 * 1024) {
+      setError('Image must be under 20MB');
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      const mimeType = file.type;
+      const preview = result; // data URL for preview
+      setter({ base64, mimeType, preview });
+    };
+    reader.readAsDataURL(file);
   };
 
   const generateVideo = async () => {
@@ -287,17 +206,13 @@ export default function App() {
       setError('Please enter a prompt');
       return;
     }
-
-    // Validate images for image-to-video mode
-    if (mode === 'image-to-video') {
-      if (imageMode === 'reference' && images.length === 0) {
-        setError('Please upload at least one reference image');
-        return;
-      }
-      if (imageMode === 'first-last-frame' && !firstFrame) {
-        setError('Please upload a first frame image');
-        return;
-      }
+    if (mode === 'image-to-video' && !firstFrame) {
+      setError('Please upload a first frame image');
+      return;
+    }
+    if (mode === 'image-to-video' && imageMode === 'first-last-frame' && !lastFrame) {
+      setError('Please upload a last frame image');
+      return;
     }
 
     setError('');
@@ -309,26 +224,17 @@ export default function App() {
     };
 
     if (mode === 'image-to-video') {
-      if (imageMode === 'reference') {
-        // Use referenceImages array for reference mode
-        instance.referenceImages = images.map(img => ({
-          bytesBase64Encoded: img.base64,
-          mimeType: img.mimeType,
-        }));
-      } else {
-        // First/last frame mode
-        if (firstFrame) {
-          instance.image = {
-            bytesBase64Encoded: firstFrame.base64,
-            mimeType: firstFrame.mimeType,
-          };
-        }
-        if (lastFrame) {
-          instance.lastFrame = {
-            bytesBase64Encoded: lastFrame.base64,
-            mimeType: lastFrame.mimeType,
-          };
-        }
+      if (firstFrame) {
+        instance.image = {
+          bytesBase64Encoded: firstFrame.base64,
+          mimeType: firstFrame.mimeType,
+        };
+      }
+      if (imageMode === 'first-last-frame' && lastFrame) {
+        instance.lastFrame = {
+          bytesBase64Encoded: lastFrame.base64,
+          mimeType: lastFrame.mimeType,
+        };
       }
     }
 
@@ -339,6 +245,7 @@ export default function App() {
         resolution: settings.resolution,
         durationSeconds: settings.duration,
         personGeneration: settings.personGeneration,
+        sampleCount: 1,
       },
     };
 
@@ -368,22 +275,19 @@ export default function App() {
           status: 'PENDING',
           createdAt: Date.now(),
           model: settings.model,
+          mode,
           aspectRatio: settings.aspectRatio,
           resolution: settings.resolution,
           duration: settings.duration,
-          mode,
-          imageCount: mode === 'image-to-video' ? (imageMode === 'reference' ? images.length : (firstFrame && lastFrame ? 2 : 1)) : undefined,
+          imagePreview: firstFrame?.preview,
         };
 
         setTasks(prev => [newTask, ...prev]);
         setActiveVideo(newTask);
         setPrompt('');
-        // Clear images after successful submission
-        if (mode === 'image-to-video') {
-          setImages([]);
-          setFirstFrame(null);
-          setLastFrame(null);
-        }
+        // Keep images for potential re-use but could clear them:
+        // setFirstFrame(null);
+        // setLastFrame(null);
       } else {
         setError('Unexpected response from API');
         setIsGenerating(false);
@@ -396,17 +300,13 @@ export default function App() {
 
   const deleteTask = (operationName: string) => {
     setTasks(prev => prev.filter(t => t.operationName !== operationName));
-    if (activeVideo?.operationName === operationName) {
-      setActiveVideo(null);
-    }
+    if (activeVideo?.operationName === operationName) setActiveVideo(null);
   };
 
   const clearHistory = () => {
     setTasks([]);
     setActiveVideo(null);
   };
-
-  const currentExamples = EXAMPLE_PROMPTS[mode];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-blue-950/30 to-gray-950 text-white">
@@ -539,215 +439,206 @@ export default function App() {
           {/* Left Panel - Input */}
           <div className="lg:col-span-2 space-y-6">
             {/* Mode Selector */}
-            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl">
-              <div className="flex gap-2 mb-4">
+            <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl">
+              <div className="flex gap-2">
                 <button
                   onClick={() => setMode('text-to-video')}
-                  className={`flex-1 py-3 px-4 rounded-xl font-medium text-sm transition-all ${
+                  className={`flex-1 py-3 px-4 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
                     mode === 'text-to-video'
                       ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
                       : 'bg-white/5 text-gray-400 hover:bg-white/10'
                   }`}
                 >
-                  ✍️ Text to Video
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Text to Video
                 </button>
                 <button
                   onClick={() => setMode('image-to-video')}
-                  className={`flex-1 py-3 px-4 rounded-xl font-medium text-sm transition-all ${
+                  className={`flex-1 py-3 px-4 rounded-xl font-medium text-sm transition-all flex items-center justify-center gap-2 ${
                     mode === 'image-to-video'
                       ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
                       : 'bg-white/5 text-gray-400 hover:bg-white/10'
                   }`}
                 >
-                  🖼️ Image to Video
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Image to Video
                 </button>
               </div>
+            </div>
 
-              {/* Image Mode Selector (only for image-to-video) */}
-              {mode === 'image-to-video' && (
+            {/* Image Upload (only for image-to-video mode) */}
+            {mode === 'image-to-video' && (
+              <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl animate-in">
+                <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                  🖼️ Image Input
+                </h3>
+
+                {/* Image mode sub-selector */}
                 <div className="flex gap-2 mb-4">
                   <button
-                    onClick={() => setImageMode('reference')}
+                    onClick={() => setImageMode('first-frame')}
                     className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
-                      imageMode === 'reference'
+                      imageMode === 'first-frame'
                         ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                        : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-transparent'
+                        : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
                     }`}
                   >
-                    📸 Reference Images (up to 3)
+                    First Frame Only
                   </button>
                   <button
                     onClick={() => setImageMode('first-last-frame')}
                     className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
                       imageMode === 'first-last-frame'
-                        ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30'
-                        : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-transparent'
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                        : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
                     }`}
                   >
-                    🎬 First & Last Frame
+                    First + Last Frame
                   </button>
                 </div>
-              )}
 
-              {/* Image Upload Area (for image-to-video mode) */}
-              {mode === 'image-to-video' && (
-                <div className="mb-4">
-                  {imageMode === 'reference' ? (
-                    <>
-                      <div
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
-                          isDragging
-                            ? 'border-purple-400 bg-purple-500/10'
-                            : 'border-white/20 hover:border-white/40 hover:bg-white/5'
-                        }`}
-                      >
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={(e) => handleImageUpload(e.target.files)}
-                          className="hidden"
+                <div className={`grid ${imageMode === 'first-last-frame' ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
+                  {/* First Frame Upload */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-2">
+                      {imageMode === 'first-last-frame' ? '🎬 First Frame' : '🖼️ Reference Image'}
+                    </label>
+                    <input
+                      ref={firstFrameInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageUpload(file, setFirstFrame);
+                      }}
+                      className="hidden"
+                    />
+                    {firstFrame ? (
+                      <div className="relative group">
+                        <img
+                          src={firstFrame.preview}
+                          alt="First frame"
+                          className="w-full h-40 object-cover rounded-xl border border-white/10"
                         />
-                        <svg className="w-10 h-10 mx-auto mb-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => firstFrameInputRef.current?.click()}
+                            className="px-3 py-1.5 rounded-lg bg-white/20 text-white text-xs hover:bg-white/30 transition-colors"
+                          >
+                            Replace
+                          </button>
+                          <button
+                            onClick={() => setFirstFrame(null)}
+                            className="px-3 py-1.5 rounded-lg bg-red-500/30 text-red-200 text-xs hover:bg-red-500/50 transition-colors"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="mt-2 text-[10px] text-gray-500 text-center">
+                          ✓ Image loaded ({firstFrame.mimeType})
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => firstFrameInputRef.current?.click()}
+                        className="w-full h-40 rounded-xl border-2 border-dashed border-white/20 hover:border-purple-400/50 transition-colors flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-gray-300"
+                      >
+                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
-                        <p className="text-sm text-gray-400">
-                          Drag & drop images or <span className="text-purple-300 underline">browse</span>
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Up to 3 images, max 20MB each
-                        </p>
-                      </div>
+                        <span className="text-xs">Click to upload image</span>
+                        <span className="text-[10px] text-gray-600">PNG, JPG, WEBP (max 20MB)</span>
+                      </button>
+                    )}
+                  </div>
 
-                      {/* Image Preview Grid */}
-                      {images.length > 0 && (
-                        <div className="grid grid-cols-3 gap-2 mt-3">
-                          {images.map((img) => (
-                            <div key={img.id} className="relative group">
-                              <img
-                                src={img.preview}
-                                alt="Reference"
-                                className="w-full h-24 object-cover rounded-lg"
-                              />
-                              <button
-                                onClick={(e) => { e.stopPropagation(); removeImage(img.id); }}
-                                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {/* First & Last Frame Mode */}
-                      <div className="grid grid-cols-2 gap-3">
-                        {/* First Frame */}
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">First Frame</label>
-                          {firstFrame ? (
-                            <div className="relative group">
-                              <img
-                                src={firstFrame.preview}
-                                alt="First frame"
-                                className="w-full h-32 object-cover rounded-lg"
-                              />
-                              <button
-                                onClick={() => removeImage(firstFrame.id)}
-                                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ) : (
-                            <div
-                              onClick={() => firstFrameInputRef.current?.click()}
-                              className="h-32 border-2 border-dashed border-white/20 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-white/40 hover:bg-white/5 transition-all"
-                            >
-                              <input
-                                ref={firstFrameInputRef}
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleImageUpload(e.target.files)}
-                                className="hidden"
-                              />
-                              <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                              </svg>
-                              <span className="text-xs text-gray-400">Upload</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Last Frame */}
-                        <div>
-                          <label className="block text-xs text-gray-400 mb-1">Last Frame (optional)</label>
-                          {lastFrame ? (
-                            <div className="relative group">
-                              <img
-                                src={lastFrame.preview}
-                                alt="Last frame"
-                                className="w-full h-32 object-cover rounded-lg"
-                              />
-                              <button
-                                onClick={() => removeImage(lastFrame.id)}
-                                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ) : (
-                            <div
+                  {/* Last Frame Upload (only in first-last-frame mode) */}
+                  {imageMode === 'first-last-frame' && (
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-2">🎬 Last Frame</label>
+                      <input
+                        ref={lastFrameInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleImageUpload(file, setLastFrame);
+                        }}
+                        className="hidden"
+                      />
+                      {lastFrame ? (
+                        <div className="relative group">
+                          <img
+                            src={lastFrame.preview}
+                            alt="Last frame"
+                            className="w-full h-40 object-cover rounded-xl border border-white/10"
+                          />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center gap-2">
+                            <button
                               onClick={() => lastFrameInputRef.current?.click()}
-                              className="h-32 border-2 border-dashed border-white/20 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-white/40 hover:bg-white/5 transition-all"
+                              className="px-3 py-1.5 rounded-lg bg-white/20 text-white text-xs hover:bg-white/30 transition-colors"
                             >
-                              <input
-                                ref={lastFrameInputRef}
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleImageUpload(e.target.files)}
-                                className="hidden"
-                              />
-                              <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-                              </svg>
-                              <span className="text-xs text-gray-400">Upload</span>
-                            </div>
-                          )}
+                              Replace
+                            </button>
+                            <button
+                              onClick={() => setLastFrame(null)}
+                              className="px-3 py-1.5 rounded-lg bg-red-500/30 text-red-200 text-xs hover:bg-red-500/50 transition-colors"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <div className="mt-2 text-[10px] text-gray-500 text-center">
+                            ✓ Image loaded ({lastFrame.mimeType})
+                          </div>
                         </div>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">
-                        💡 Define the start and end of your video for precise control
-                      </p>
-                    </>
+                      ) : (
+                        <button
+                          onClick={() => lastFrameInputRef.current?.click()}
+                          className="w-full h-40 rounded-xl border-2 border-dashed border-white/20 hover:border-pink-400/50 transition-colors flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-gray-300"
+                        >
+                          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span className="text-xs">Click to upload image</span>
+                          <span className="text-[10px] text-gray-600">PNG, JPG, WEBP (max 20MB)</span>
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
-              )}
 
-              {/* Prompt Input */}
+                <p className="mt-3 text-[10px] text-gray-500">
+                  💡 The image will be used as a reference/starting frame. Veo will animate it based on your prompt.
+                </p>
+              </div>
+            )}
+
+            {/* Prompt Input */}
+            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl">
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 ✨ Video Prompt
               </label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder={mode === 'text-to-video'
-                  ? "Describe the video you want to generate... Include subject, action, style, camera motion, composition, and ambiance for best results."
-                  : "Describe how you want the image(s) to be animated... Include motion, camera movement, and any specific actions."
+                placeholder={
+                  mode === 'text-to-video'
+                    ? "Describe the video you want to generate... Include subject, action, style, camera motion, composition, and ambiance for best results."
+                    : "Describe how the image should animate... e.g., 'The scene comes alive with gentle motion, camera slowly zooming in'"
                 }
-                rows={mode === 'image-to-video' ? 3 : 5}
+                rows={5}
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:border-blue-400 focus:outline-none transition-colors resize-none"
               />
 
               {/* Current settings summary */}
               <div className="flex flex-wrap gap-2 mt-3">
+                <span className={`text-xs px-2 py-1 rounded-lg border ${mode === 'text-to-video' ? 'bg-blue-500/10 text-blue-300 border-blue-500/20' : 'bg-purple-500/10 text-purple-300 border-purple-500/20'}`}>
+                  {mode === 'text-to-video' ? '📝 Text → Video' : '🖼️ Image → Video'}
+                </span>
                 <span className="text-xs px-2 py-1 rounded-lg bg-blue-500/10 text-blue-300 border border-blue-500/20">
                   {settings.aspectRatio}
                 </span>
@@ -758,13 +649,8 @@ export default function App() {
                   {settings.duration}s
                 </span>
                 <span className="text-xs px-2 py-1 rounded-lg bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-                  🎵 Audio included
+                  🎵 Audio
                 </span>
-                {mode === 'image-to-video' && (
-                  <span className="text-xs px-2 py-1 rounded-lg bg-orange-500/10 text-orange-300 border border-orange-500/20">
-                    🖼️ {imageMode === 'reference' ? `${images.length}/3 images` : (firstFrame && lastFrame ? '2 frames' : firstFrame ? '1 frame' : 'No image')}
-                  </span>
-                )}
               </div>
 
               {/* Error */}
@@ -777,13 +663,11 @@ export default function App() {
               {/* Generate Button */}
               <button
                 onClick={generateVideo}
-                disabled={isGenerating || !prompt.trim()}
+                disabled={isGenerating || !prompt.trim() || (mode === 'image-to-video' && !firstFrame)}
                 className={`mt-4 w-full py-3.5 rounded-xl font-semibold text-white transition-all ${
-                  isGenerating || !prompt.trim()
+                  isGenerating || !prompt.trim() || (mode === 'image-to-video' && !firstFrame)
                     ? 'bg-gray-700 cursor-not-allowed opacity-50'
-                    : mode === 'text-to-video'
-                      ? 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:opacity-90 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40'
-                      : 'bg-gradient-to-r from-purple-600 via-pink-600 to-orange-600 hover:opacity-90 shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40'
+                    : 'bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:opacity-90 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40'
                 }`}
               >
                 {isGenerating ? (
@@ -796,7 +680,7 @@ export default function App() {
                   </span>
                 ) : (
                   <span className="flex items-center justify-center gap-2">
-                    🎬 Generate {mode === 'text-to-video' ? 'Video' : 'from Image'}
+                    🎬 Generate Video
                   </span>
                 )}
               </button>
@@ -806,7 +690,7 @@ export default function App() {
             <div className="p-6 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl">
               <h3 className="text-sm font-medium text-gray-300 mb-3">💡 Example Prompts</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {currentExamples.map((ep, i) => (
+                {(mode === 'text-to-video' ? EXAMPLE_PROMPTS : IMAGE_EXAMPLE_PROMPTS).map((ep, i) => (
                   <button
                     key={i}
                     onClick={() => setPrompt(ep)}
@@ -827,7 +711,7 @@ export default function App() {
                   <p className="mt-1">Describe what/who is in the scene and the environment</p>
                 </div>
                 <div className="p-3 rounded-lg bg-white/5">
-                  <span className="text-purple-300 font-medium">Action</span>
+                  <span className="text-purple-300 font-medium">Action & Motion</span>
                   <p className="mt-1">What the subject is doing (walking, running, turning)</p>
                 </div>
                 <div className="p-3 rounded-lg bg-white/5">
@@ -838,14 +722,6 @@ export default function App() {
                   <span className="text-cyan-300 font-medium">Audio & Dialogue</span>
                   <p className="mt-1">Use quotes for speech, describe sounds and ambience</p>
                 </div>
-                {mode === 'image-to-video' && (
-                  <>
-                    <div className="p-3 rounded-lg bg-white/5 sm:col-span-2">
-                      <span className="text-orange-300 font-medium">Image Animation</span>
-                      <p className="mt-1">Describe how you want the image to move. Be specific about motion direction, speed, and camera movement. For reference images, describe the scene you want to create with those subjects.</p>
-                    </div>
-                  </>
-                )}
               </div>
             </div>
           </div>
@@ -865,23 +741,37 @@ export default function App() {
                     className="w-full rounded-xl"
                   />
                   <p className="mt-2 text-xs text-gray-400 line-clamp-2">{activeVideo.prompt}</p>
-                  <div className="flex gap-2 mt-2">
-                    <a
-                      href={`${activeVideo.videoUrl}${activeVideo.videoUrl.includes('?') ? '&' : '?'}key=${settings.apiKey}`}
-                      download
-                      target="_blank"
-                      rel="noopener"
-                      className="flex-1 text-center py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-gray-300 transition-colors"
-                    >
-                      ⬇️ Download
-                    </a>
-                    <span className="text-[10px] text-gray-500 flex items-center">
-                      ⏰ 2 days
-                    </span>
-                  </div>
+                  <a
+                    href={`${activeVideo.videoUrl}${activeVideo.videoUrl.includes('?') ? '&' : '?'}key=${settings.apiKey}`}
+                    download
+                    target="_blank"
+                    rel="noopener"
+                    className="mt-2 block text-center py-2 rounded-lg bg-white/5 hover:bg-white/10 text-sm text-gray-300 transition-colors"
+                  >
+                    ⬇️ Download Video
+                  </a>
+                  <p className="mt-2 text-[10px] text-gray-500 text-center">
+                    ⏰ Video available for 2 days
+                  </p>
                 </div>
               ) : activeVideo ? (
                 <div className="flex flex-col items-center justify-center py-12">
+                  {/* Show uploaded image preview while generating */}
+                  {activeVideo.imagePreview && (
+                    <div className="mb-4 relative">
+                      <img
+                        src={activeVideo.imagePreview}
+                        alt="Input"
+                        className="w-32 h-32 object-cover rounded-xl border border-white/10"
+                      />
+                      <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                      </div>
+                    </div>
+                  )}
                   <div className="relative">
                     <div className="w-16 h-16 rounded-full border-4 border-blue-500/30 border-t-blue-500 animate-spin"></div>
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -917,7 +807,7 @@ export default function App() {
                   </button>
                 )}
               </div>
-              <div className="space-y-2 max-h-80 overflow-y-auto">
+              <div className="space-y-2 max-h-96 overflow-y-auto">
                 {tasks.length === 0 ? (
                   <p className="text-xs text-gray-500 text-center py-4">No videos generated yet</p>
                 ) : (
@@ -931,6 +821,14 @@ export default function App() {
                           : 'bg-white/5 hover:bg-white/10 border border-transparent'
                       }`}
                     >
+                      {/* Show image thumbnail if image-to-video */}
+                      {task.imagePreview && (
+                        <img
+                          src={task.imagePreview}
+                          alt="Input"
+                          className="w-full h-16 object-cover rounded-lg mb-2"
+                        />
+                      )}
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-xs text-gray-300 line-clamp-2 flex-1">{task.prompt}</p>
                         <button
@@ -942,8 +840,8 @@ export default function App() {
                       </div>
                       <div className="flex items-center gap-2 mt-1.5">
                         <StatusBadge status={task.status} />
-                        <span className="text-[10px] text-gray-500">
-                          {task.mode === 'text-to-video' ? '✍️' : '🖼️'} {task.model.replace('-generate-preview', '').replace('-fast-generate-preview', ' Fast')}
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${task.mode === 'image-to-video' ? 'bg-purple-500/10 text-purple-300' : 'bg-blue-500/10 text-blue-300'}`}>
+                          {task.mode === 'image-to-video' ? '🖼️ I2V' : '📝 T2V'}
                         </span>
                       </div>
                     </div>
